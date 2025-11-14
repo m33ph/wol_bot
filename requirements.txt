@@ -1,0 +1,6 @@
+python-telegram-bot==20.10
+python-dotenv
+wakeonlan
+paramiko
+aiosqlite
+python-dateutil

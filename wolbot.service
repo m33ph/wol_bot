@@ -1,0 +1,18 @@
+[Unit]
+Description=Telegram WOL/Router/Traffic Bot
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/%u/wol_bot
+ExecStart=/home/%u/wol_bot/venv/bin/python /home/%u/wol_bot/wol_bot_conntrack.py
+EnvironmentFile=/home/%u/wol_bot/wol.env
+
+Restart=always
+RestartSec=5
+
+User=%u
+Group=%u
+
+[Install]
+WantedBy=multi-user.target

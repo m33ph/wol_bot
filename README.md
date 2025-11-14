@@ -50,17 +50,13 @@ Copy code
           │ ─ выключение SSH           │
           └────────────────────────────┘
 ```
-```yaml
-Copy code
 
----
-```
 # 📦 Установка
 
 ## 1. Клонируйте репозиторий
 
 ```bash
-git clone https://github.com/USERNAME/wol-bot.git
+git clone https://github.com/m33ph/wol-bot.git
 cd wol-bot
 ```
 2. Запустите установщик

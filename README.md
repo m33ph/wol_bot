@@ -54,7 +54,7 @@
 # 📦 Установка
 ```bash
 Copy code
-curl -fsSL https://raw.githubusercontent.com/USERNAME/wol-bot/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/USERNAME/m33ph/main/install.sh | bash
 ```
 Установщик:
 

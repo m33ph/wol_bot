@@ -1,170 +1,182 @@
 #!/usr/bin/env bash
 set -e
 
-echo "============================================="
-echo "      УСТАНОВКА TELEGRAM WOL BOT"
-echo "============================================="
+### ----------------------------------------------------------
+### Определяем пользователя и домашний каталог
+### ----------------------------------------------------------
+if [ -n "$SUDO_USER" ] && [ "$USER" = "root" ]; then
+    REAL_USER="$SUDO_USER"
+else
+    REAL_USER="$USER"
+fi
 
-USER_HOME="/home/$USER"
-BOT_DIR="$USER_HOME/wol_bot"
-DATA_DIR="$USER_HOME/wol_bot_data"
-ENV_FILE="$BOT_DIR/wol.env"
-SERVICE_FILE="/etc/systemd/system/wolbot.service"
+REAL_HOME=$(eval echo "~$REAL_USER")
 
+BOT_DIR="$REAL_HOME/wol_bot"
+DATA_DIR="$REAL_HOME/wol_bot_data"
+ENV_FILE="$BOT_DIR/.env"
+
+REPO_URL="https://raw.githubusercontent.com/m33ph/wol_bot/main"
+
+### ----------------------------------------------------------
+### Утилита: проверка IP
+### ----------------------------------------------------------
+valid_ip() {
+    local ip=$1
+    if [[ "$ip" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; then
+        IFS='.' read -r a b c d <<< "$ip"
+        if (( a<=255 && b<=255 && c<=255 && d<=255 )); then
+            return 0
+        fi
+    fi
+    return 1
+}
+
+### ----------------------------------------------------------
+### Запрашиваем данные
+### ----------------------------------------------------------
+echo "==============================================="
+echo "           УСТАНОВКА TELEGRAM WOL BOT"
+echo "==============================================="
 echo
 echo "Бот будет установлен в: $BOT_DIR"
 echo "Данные будут храниться в: $DATA_DIR"
 echo
 
-# ---------------------------------------------------------
-# Функция проверки корректности IP
-# ---------------------------------------------------------
-valid_ip() {
-    local ip=$1
-    local IFS=.
-    local -a octets=($ip)
+printf "Введите Telegram Bot Token: "
+read -r TG_TOKEN
 
-    [[ ${#octets[@]} -eq 4 ]] || return 1
+printf "Введите Telegram User ID (кому разрешён доступ): "
+read -r TG_UID
 
-    for o in "${octets[@]}"; do
-        [[ $o =~ ^[0-9]+$ ]] || return 1
-        (( o >= 0 && o <= 255 )) || return 1
-    done
-
-    return 0
-}
-
-
-# ---------------------------------------------------------
-# СБОР ДАННЫХ ДЛЯ .env
-# ---------------------------------------------------------
-
-echo "=== Telegram настройки ==="
-read -rp "Введите Telegram Bot Token: " TG_TOKEN
-read -rp "Введите ваш Telegram User ID: " TG_ADMIN
-
-echo
-echo "=== Настройки сервера OMV ==="
-read -rp "MAC адрес сервера OMV (aa:bb:cc:dd:ee:ff): " SERVER_MAC
-
+### --- OMV сервер ---
 while true; do
-    read -rp "IP сервера OMV: " SERVER_IP
-    valid_ip "$SERVER_IP" && break
+    printf "Введите IP адрес OMV сервера: "
+    read -r OMV_IP
+    if valid_ip "$OMV_IP"; then break; fi
     echo "Неверный IP, попробуйте снова."
 done
 
-read -rp "SSH пользователь OMV: " SSH_USER_OMV
-read -rp "Путь к SSH ключу OMV (по умолчанию ~/.ssh/omv_key): " SSH_KEY_OMV
-SSH_KEY_OMV=${SSH_KEY_OMV:-"$USER_HOME/.ssh/omv_key"}
+printf "Введите MAC-адрес OMV сервера: "
+read -r OMV_MAC
 
-echo
-echo "=== Настройки роутера OpenWrt ==="
+### --- SSH для OMV ---
+printf "Включить выключение через SSH? (yes/no): "
+read -r SSH_YN
+if [[ "$SSH_YN" = "yes" ]]; then
+    SSH_ENABLED="true"
+    printf "SSH логин для OMV: "
+    read -r SSH_USER
+    printf "Путь к приватному ключу SSH: "
+    read -r SSH_KEY
+else
+    SSH_ENABLED="false"
+    SSH_USER=""
+    SSH_KEY=""
+fi
+
+### --- Роутер ---
 while true; do
-    read -rp "IP роутера OpenWrt: " ROUTER_IP
-    valid_ip "$ROUTER_IP" && break
+    printf "Введите IP роутера (OpenWrt): "
+    read -r ROUTER_IP
+    if valid_ip "$ROUTER_IP"; then break; fi
     echo "Неверный IP, попробуйте снова."
 done
 
-read -rp "SSH пользователь роутера (обычно root): " ROUTER_SSH_USER
-read -rp "Путь к SSH ключу роутера (по умолчанию ~/.ssh/router_key): " ROUTER_SSH_KEY
-ROUTER_SSH_KEY=${ROUTER_SSH_KEY:-"$USER_HOME/.ssh/router_key"}
+printf "SSH логин роутера: "
+read -r ROUTER_USER
+printf "Путь к приватному ключу роутера: "
+read -r ROUTER_KEY
 
-echo
-echo "=== Настройки трафика ==="
-read -rp "Подсеть LAN (например 192.168.1.): " LAN_SUBNET
-LAN_SUBNET=${LAN_SUBNET:-"192.168.1."}
-
-read -rp "Интервал сбора conntrack (секунды, по умолчанию 600): " TRAFFIC_INTERVAL
-TRAFFIC_INTERVAL=${TRAFFIC_INTERVAL:-600}
-
-read -rp "Период хранения статистики (дней, по умолчанию 730): " RETENTION
-RETENTION=${RETENTION:-730}
-
+### ----------------------------------------------------------
+### Создаём директории
+### ----------------------------------------------------------
 echo
 echo "=== Создаю директории ==="
-mkdir -p "$BOT_DIR" "$DATA_DIR"
+mkdir -p "$BOT_DIR"
+mkdir -p "$DATA_DIR"
 
-# ---------------------------------------------------------
-# Копируем файлы
-# ---------------------------------------------------------
+### ----------------------------------------------------------
+### Скачиваем файлы бота
+### ----------------------------------------------------------
+echo "[1/5] Копирую Python-файлы..."
 
-echo "[1/7] Копирую Python-файлы..."
-cp wol_bot_conntrack.py "$BOT_DIR/"
-cp requirements.txt "$BOT_DIR/"
+curl -fsSL "$REPO_URL/wol_bot.py" -o "$BOT_DIR/wol_bot.py"
+curl -fsSL "$REPO_URL/wol_bot_conntrack.py" -o "$BOT_DIR/wol_bot_conntrack.py"
+curl -fsSL "$REPO_URL/wol_bot_utils.py" -o "$BOT_DIR/wol_bot_utils.py"
 
-echo "[2/7] Создаю файл настроек $ENV_FILE ..."
+### ----------------------------------------------------------
+### Создаём .env
+### ----------------------------------------------------------
+echo "[2/5] Создаю .env файл..."
 
 cat > "$ENV_FILE" <<EOF
-TG_BOT_TOKEN="$TG_TOKEN"
-ADMIN_USER_IDS="$TG_ADMIN"
+WOL_BOT_TOKEN="$TG_TOKEN"
+WOL_ALLOWED_USERS="$TG_UID"
 
-SERVER_MAC="$SERVER_MAC"
-SERVER_IP="$SERVER_IP"
-SSH_USER_OMV="$SSH_USER_OMV"
-SSH_KEY_OMV="$SSH_KEY_OMV"
+WOL_SERVER_MAC="$OMV_MAC"
+WOL_SERVER_IP="$OMV_IP"
+WOL_SERVER_NAME="OMV Server"
+
+WOL_SSH_ENABLED="$SSH_ENABLED"
+WOL_SSH_USER="$SSH_USER"
+WOL_SSH_KEY_FILE="$SSH_KEY"
 
 ROUTER_IP="$ROUTER_IP"
-ROUTER_SSH_USER="$ROUTER_SSH_USER"
-ROUTER_SSH_KEY="$ROUTER_SSH_KEY"
+ROUTER_SSH_USER="$ROUTER_USER"
+ROUTER_SSH_KEY_FILE="$ROUTER_KEY"
 
-TRAFFIC_LAN_SUBNET="$LAN_SUBNET"
-TRAFFIC_GREP_PATTERN="$LAN_SUBNET"
-TRAFFIC_COLLECTION_ENABLED="true"
-TRAFFIC_COLLECTION_INTERVAL="$TRAFFIC_INTERVAL"
-TRAFFIC_DB_PATH="$DATA_DIR/traffic_stats.db"
-TRAFFIC_RETENTION_DAYS="$RETENTION"
-
-LOG_PATH="$DATA_DIR/wol_bot_conntrack.log"
-KEEP_CHAT_MESSAGES="4"
+TRAFFIC_DB_PATH="$DATA_DIR/traffic.db"
+TRAFFIC_RETENTION_DAYS=730
 EOF
 
-# ---------------------------------------------------------
-# Python виртуальное окружение
-# ---------------------------------------------------------
+### ----------------------------------------------------------
+### Python и зависимости
+### ----------------------------------------------------------
+echo "[3/5] Устанавливаю зависимости..."
 
-echo "[3/7] Создаю Python venv..."
+sudo apt update -y
+sudo apt install -y python3 python3-pip python3-venv
+
 python3 -m venv "$BOT_DIR/venv"
-source "$BOT_DIR/venv/bin/activate"
+"$BOT_DIR/venv/bin/pip" install -U pip
+"$BOT_DIR/venv/bin/pip" install python-telegram-bot python-dotenv paramiko wakeonlan
 
-echo "[4/7] Устанавливаю зависимости..."
-pip install --upgrade pip
-pip install -r "$BOT_DIR/requirements.txt"
+### ----------------------------------------------------------
+### systemd сервис
+### ----------------------------------------------------------
+echo "[4/5] Устанавливаю systemd сервис..."
 
-# ---------------------------------------------------------
-# Права
-# ---------------------------------------------------------
+SERVICE_FILE="/etc/systemd/system/wol_bot.service"
 
-echo "[5/7] Выставляю права безопасности..."
+sudo bash -c "cat > $SERVICE_FILE" <<EOF
+[Unit]
+Description=Telegram WoL Bot
+After=network.target
 
-chown -R "$USER:$USER" "$BOT_DIR" "$DATA_DIR"
-chmod 700 "$BOT_DIR" "$DATA_DIR"
-chmod 600 "$ENV_FILE"
-chmod 600 "$BOT_DIR/wol_bot_conntrack.py"
+[Service]
+User=$REAL_USER
+WorkingDirectory=$BOT_DIR
+EnvironmentFile=$ENV_FILE
+ExecStart=$BOT_DIR/venv/bin/python $BOT_DIR/wol_bot.py
+Restart=always
+RestartSec=5
 
-# ---------------------------------------------------------
-# Systemd unit
-# ---------------------------------------------------------
+[Install]
+WantedBy=multi-user.target
+EOF
 
-echo "[6/7] Устанавливаю systemd сервис..."
+sudo systemctl daemon-reload
+sudo systemctl enable wol_bot.service
+sudo systemctl restart wol_bot.service
 
-cp wolbot.service "$SERVICE_FILE"
-# Подставляем имя пользователя
-sed -i "s|%u|$USER|g" "$SERVICE_FILE"
-
-systemctl daemon-reload
-systemctl enable wolbot
-systemctl restart wolbot
-
-# ---------------------------------------------------------
-# Готово
-# ---------------------------------------------------------
-
+### ----------------------------------------------------------
+### Готово
+### ----------------------------------------------------------
 echo
-echo "============================================="
-echo "   УСТАНОВКА ЗАВЕРШЕНА УСПЕШНО!"
-echo "============================================="
-echo
-echo "Файл конфигурации: $ENV_FILE"
-echo "Перезапуск: sudo systemctl restart wolbot"
-echo "Логи:       journalctl -u wolbot -f"
+echo "==============================================="
+echo "         УСТАНОВКА ЗАВЕРШЕНА УСПЕШНО"
+echo "==============================================="
+echo "Бот установлен в: $BOT_DIR"
+echo "Логи: journalctl -u wol_bot -f"
 echo

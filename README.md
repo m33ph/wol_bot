@@ -55,7 +55,7 @@
 
 # 📦 Установка
 ```bash
-curl -fsSL https://raw.githubusercontent.com/m33ph/wol_bot/main/install.sh | sudo bash
+bash <(curl -fsSL https://raw.githubusercontent.com/m33ph/wol_bot/refs/heads/main/install.sh)
 ```
 Установщик:
 

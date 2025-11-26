@@ -80,7 +80,7 @@ curl -fsSL https://raw.githubusercontent.com/m33ph/wol-bot/main/uninstall.sh | b
 # Обновление:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/USERNAME/wol-bot/main/update.sh | bash
+curl -fsSL https://raw.githubusercontent.com/m33ph/wol-bot/main/update.sh | bash
 ```
 
 🛠 Настройки OpenWrt

@@ -55,7 +55,7 @@
 
 # 📦 Установка
 ```bash
-curl -fsSL https://raw.githubusercontent.com/m33ph/wol_bot/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/m33ph/wol_bot/main/install.sh | sudo bash
 ```
 Установщик:
 
@@ -80,7 +80,7 @@ curl -fsSL https://raw.githubusercontent.com/m33ph/wol_bot/main/uninstall.sh | s
 # Обновление:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/m33ph/wol-bot/main/update.sh | bash
+curl -fsSL https://raw.githubusercontent.com/m33ph/wol-bot/main/update.sh | sudo bash
 ```
 
 🛠 Настройки OpenWrt

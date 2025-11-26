@@ -55,7 +55,7 @@
 
 # 📦 Установка
 ```bash
-curl -fsSL https://raw.githubusercontent.com/USERNAME/m33ph/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/m33ph/wol_bot/main/install.sh | bash
 ```
 Установщик:
 
@@ -70,6 +70,18 @@ curl -fsSL https://raw.githubusercontent.com/USERNAME/m33ph/main/install.sh | ba
 создаст systemd-unit
 
 запустит бота
+
+# Удаление:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/m33ph/wol-bot/main/uninstall.sh | bash
+```
+
+# Обновление:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/USERNAME/wol-bot/main/update.sh | bash
+```
 
 🛠 Настройки OpenWrt
 Необходимый доступ по SSH

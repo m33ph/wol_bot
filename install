@@ -1,102 +1,93 @@
-#!/usr/bin/env bash
+#!/bin/bash
 set -e
 
 echo "==============================================="
-echo "         УСТАНОВКА TELEGRAM WOL BOT"
+echo "       УСТАНОВКА TELEGRAM WOL BOT"
 echo "==============================================="
+
+# Определяем куда ставить
+INSTALL_DIR="$HOME/wol_bot"
+DATA_DIR="$HOME/wol_bot_data"
+
 echo
-
-# 🔹 Пользователь, под которым запускаем установку
-USER_NAME=$(whoami)
-HOME_DIR=$(getent passwd "$USER_NAME" | cut -d: -f6)
-
-BOT_DIR="$HOME_DIR/wol_bot"
-DATA_DIR="$HOME_DIR/wol_bot_data"
-ENV_FILE="$BOT_DIR/.env"
-
-echo "Бот будет установлен в: $BOT_DIR"
+echo "Бот будет установлен в: $INSTALL_DIR"
 echo "Данные будут храниться в: $DATA_DIR"
 echo
 
-# 🔹 Функция проверки IP (БЕЗ зависания и корректная)
-valid_ip() {
-    local ip=$1
-    [[ $ip =~ ^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$ ]]
-}
+# === Запрос данных без проверки IP ===
+read -p "Введите Telegram Bot Token: " BOT_TOKEN
+read -p "Введите Telegram User ID: " USER_ID
+read -p "Введите IP OMV сервера: " OMV_IP
+read -p "Введите MAC OMV сервера (aa:bb:cc:dd:ee:ff): " OMV_MAC
+read -p "Введите SSH пользователя OMV: " OMV_SSH_USER
+read -p "Введите путь к SSH ключу для OMV: " OMV_SSH_KEY
+read -p "Введите IP роутера OpenWRT: " ROUTER_IP
+read -p "Введите SSH пользователя роутера: " ROUTER_USER
+read -p "Введите путь к SSH ключу роутера: " ROUTER_SSH_KEY
 
-ask_ip() {
-    local input
-    while true; do
-        read -rp "$1: " input
-        if valid_ip "$input"; then
-            echo "$input"
-            return
-        else
-            echo "❌ Неверный IP, попробуйте снова."
-        fi
-    done
-}
-
-# 🔹 Ввод параметров
-read -rp "Введите Telegram Bot Token: " BOT_TOKEN
-read -rp "Введите Telegram User ID: " USER_ID
-OMV_IP=$(ask_ip "Введите IP OMV сервера")
-ROUTER_IP=$(ask_ip "Введите IP роутера OpenWrt")
-
-# 🔹 Создание директорий
-mkdir -p "$BOT_DIR"
+echo
+echo "=== Создаю директории ==="
+mkdir -p "$INSTALL_DIR"
 mkdir -p "$DATA_DIR"
 
-# 🔹 Установка Python зависимостей
-sudo apt update -y
-sudo apt install -y python3 python3-pip python3-venv git
+echo "=== Качаю файлы бота ==="
+curl -fsSL https://raw.githubusercontent.com/m33ph/wol_bot/main/wol_bot.py -o "$INSTALL_DIR/wol_bot.py"
+curl -fsSL https://raw.githubusercontent.com/m33ph/wol_bot/main/conntrack_tools.py -o "$INSTALL_DIR/conntrack_tools.py"
+curl -fsSL https://raw.githubusercontent.com/m33ph/wol_bot/main/traffic_db.py -o "$INSTALL_DIR/traffic_db.py"
+curl -fsSL https://raw.githubusercontent.com/m33ph/wol_bot/main/buttons.py -o "$INSTALL_DIR/buttons.py"
 
-# 🔹 Клонируем свежую версию репозитория
-if [[ -d "$BOT_DIR/.git" ]]; then
-    echo "Обновляю существующий репозиторий..."
-    git -C "$BOT_DIR" pull
-else
-    git clone --depth 1 https://github.com/m33ph/wol_bot.git "$BOT_DIR"
-fi
+echo "=== Создаю виртуальное окружение ==="
+python3 -m venv "$INSTALL_DIR/venv"
+source "$INSTALL_DIR/venv/bin/activate"
+pip install -U pip
+pip install python-telegram-bot==20.7 paramiko wakeonlan
 
-# 🔹 Создание виртуального окружения
-python3 -m venv "$BOT_DIR/venv"
-source "$BOT_DIR/venv/bin/activate"
-pip install -r "$BOT_DIR/requirements.txt"
-
-# 🔹 Создаём .env
-cat > "$ENV_FILE" <<EOF
+echo "=== Создаю .env ==="
+cat > "$INSTALL_DIR/.env" <<EOF
 WOL_BOT_TOKEN="$BOT_TOKEN"
 WOL_ALLOWED_USERS="$USER_ID"
+
 WOL_SERVER_IP="$OMV_IP"
+WOL_SERVER_MAC="$OMV_MAC"
+
+WOL_SSH_ENABLED="true"
+WOL_SSH_HOST="$OMV_IP"
+WOL_SSH_PORT="22"
+WOL_SSH_USER="$OMV_SSH_USER"
+WOL_SSH_KEY_FILE="$OMV_SSH_KEY"
+
 ROUTER_IP="$ROUTER_IP"
-DATA_DIR="$DATA_DIR"
+ROUTER_SSH_USER="$ROUTER_USER"
+ROUTER_SSH_KEY_FILE="$ROUTER_SSH_KEY"
+ROUTER_REBOOT_ENABLED="true"
+
+TRAFFIC_STATS_ENABLED="true"
+TRAFFIC_DB_PATH="$DATA_DIR/traffic.db"
+TRAFFIC_RETENTION_DAYS="730"
 EOF
 
-# 🔹 Systemd service
-SERVICE_FILE="/etc/systemd/system/wolbot.service"
-sudo bash -c "cat > $SERVICE_FILE" <<EOF
+echo "=== Создаю systemd unit ==="
+
+sudo bash -c "cat > /etc/systemd/system/wol_bot.service" <<EOF
 [Unit]
 Description=Telegram WOL Bot
 After=network.target
 
 [Service]
-WorkingDirectory=$BOT_DIR
-ExecStart=$BOT_DIR/venv/bin/python3 $BOT_DIR/wol_bot.py
+WorkingDirectory=$INSTALL_DIR
+ExecStart=$INSTALL_DIR/venv/bin/python3 $INSTALL_DIR/wol_bot.py
 Restart=always
-User=$USER_NAME
-EnvironmentFile=$ENV_FILE
+User=$USER
 
 [Install]
 WantedBy=multi-user.target
 EOF
 
+echo "=== Перезагружаю systemd ==="
 sudo systemctl daemon-reload
-sudo systemctl enable wolbot.service
-sudo systemctl restart wolbot.service
+sudo systemctl enable wol_bot --now
 
 echo
 echo "==============================================="
-echo "          УСТАНОВКА ЗАВЕРШЕНА!"
-echo "Бот работает: systemctl status wolbot"
+echo "  УСТАНОВКА ЗАВЕРШЕНА! БОТ ЗАПУЩЕН!"
 echo "==============================================="

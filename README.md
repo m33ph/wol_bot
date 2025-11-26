@@ -74,7 +74,7 @@ curl -fsSL https://raw.githubusercontent.com/m33ph/wol_bot/main/install.sh | bas
 # Удаление:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/m33ph/wol-bot/main/uninstall.sh | bash
+curl -fsSL https://raw.githubusercontent.com/m33ph/wol_bot/main/uninstall.sh | sudo bash
 ```
 
 # Обновление:

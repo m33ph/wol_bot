@@ -21,12 +21,19 @@ echo
 # ---------------------------------------------------------
 valid_ip() {
     local ip=$1
-    if [[ $ip =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; then
-        return 0
-    else
-        return 1
-    fi
+    local IFS=.
+    local -a octets=($ip)
+
+    [[ ${#octets[@]} -eq 4 ]] || return 1
+
+    for o in "${octets[@]}"; do
+        [[ $o =~ ^[0-9]+$ ]] || return 1
+        (( o >= 0 && o <= 255 )) || return 1
+    done
+
+    return 0
 }
+
 
 # ---------------------------------------------------------
 # СБОР ДАННЫХ ДЛЯ .env
